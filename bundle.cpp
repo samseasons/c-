@@ -9,8 +9,47 @@
 
 using namespace std;
 
-void parse (string & file, vector<string> & imported, map<string, vector<string>> & modules,
-    map<string, string> & texts) {
+string base64 = "$0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+
+string resolve (string f, string file) {
+    if (f.rfind("./", 0) == 0) {
+        f = f.substr(2);
+    }
+    char i = f.front();
+    if (i != '.' && i != '/') {
+        f = file.substr(0, file.find_last_of('/')) + '/' + f;
+    } else if (f.rfind("../", 0) == 0) {
+        while (f.rfind("../", 0) == 0) {
+            f = f.substr(3);
+            file = file.substr(0, file.find_last_of('/'));
+        }
+        f = file.substr(0, file.find_last_of('/')) + '/' + f;
+    }
+    if (f.substr(f.length() - 3) != ".js") {
+        f += ".js";
+    }
+    return f;
+}
+
+string replace (string & text, string & past, string next) {
+    int a = 0;
+    int i = past.length();
+    int j = next.length();
+    while ((a = text.find(past, a)) != -1) {
+        if (text.length() < a + i + 1) {
+            return text;
+        }
+        if (base64.find(text[a + i]) != -1 || (base64 + "\"'.").find(text[a - 1]) != -1) {
+            a += i;
+            continue;
+        }
+        text = text.substr(0, a) + next + text.substr(a + i);
+        a += j;
+    }
+    return text;
+}
+
+void parse (string & file, map<string, vector<string>> & modules, map<string, string> & texts) {
     string text;
     ifstream f(file);
     if (f.is_open()) {
@@ -62,27 +101,6 @@ void parse (string & file, vector<string> & imported, map<string, vector<string>
         }
     }
     string texta = text;
-
-    auto resolve = [&](string f, string file) -> string {
-        if (f.rfind("./", 0) == 0) {
-            f = f.substr(2);
-        }
-        char i = f.front();
-        if (i != '.' && i != '/') {
-            f = file.substr(0, file.find_last_of('/')) + '/' + f;
-        } else if (f.rfind("../", 0) == 0) {
-            while (f.rfind("../", 0) == 0) {
-                f = f.substr(3);
-                file = file.substr(0, file.find_last_of('/'));
-            }
-            f = file.substr(0, file.find_last_of('/')) + '/' + f;
-        }
-        if (f.substr(f.length() - 3) != ".js") {
-            f += ".js";
-        }
-        return f;
-    };
-
     map<string, vector<string>> files;
     files[file] = vector<string>();
     vector<string> order;
@@ -112,8 +130,8 @@ void parse (string & file, vector<string> & imported, map<string, vector<string>
                 i += 4;
                 i += text.substr(i).find("from");
             }
-            string t = text.substr(0, i);
             j = 0;
+            string t = text.substr(0, i);
             while ((k = t.find_first_of(" ,{}", j)) != -1) {
                 if (j < k) {
                     names.push_back(t.substr(j, k - j));
@@ -134,7 +152,7 @@ void parse (string & file, vector<string> & imported, map<string, vector<string>
         if (f == "\"" || f == "'") {
             text = text.substr(i + 1);
             i = text.find(f);
-            string f = resolve(text.substr(0, i), file);
+            f = resolve(text.substr(0, i), file);
             if (files.find(f) == files.end()) {
                 files[f] = vector<string>();
                 order.push_back(f);
@@ -144,7 +162,7 @@ void parse (string & file, vector<string> & imported, map<string, vector<string>
     }
     modules[file] = order;
     for (string & i : order) {
-        if (find(imported.begin(), imported.end(), i) == imported.end()) {
+        if (texts.find(i) == texts.end()) {
             if (modules.find(i) == modules.end()) {
                 return;
             } else {
@@ -210,36 +228,16 @@ void parse (string & file, vector<string> & imported, map<string, vector<string>
         }
         i = text.find("export ");
     }
-    string base64 = "$0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
-
-    auto replace = [&](string & text, string & past, string next) -> string {
-        int a = 0;
-        int i = past.length();
-        int j = next.length();
-        while ((a = text.find(past, a)) != -1) {
-            if (text.length() < a + i + 1) {
-                return text;
-            }
-            if (base64.find(text[a + i]) != -1 || (base64 + "\"'.").find(text[a - 1]) != -1) {
-                a += i;
-                continue;
-            }
-            text = text.substr(0, a) + next + text.substr(a + i);
-            a += j;
-        }
-        return text;
-    };
-
     text = texta;
-    for (auto & pair : files) {
-        string f = pair.first;
+    for (map<string, vector<string>>::iterator pair = files.begin(); pair != files.end(); pair++) {
+        string f = pair->first;
         string path = f.substr(0, f.length() - 3);
         for (char & i : path) {
             if (base64.find(i) == -1) {
                 i = '_';
             }
         }
-        for (string & name : pair.second) {
+        for (string & name : pair->second) {
             text = replace(text, name, name + '_' + path);
         }
     }
@@ -277,7 +275,7 @@ void build (string file, string output) {
         if (find(imported.begin(), imported.end(), file) != imported.end()) {
             imports.erase(remove(imports.begin(), imports.end(), file), imports.end());
         } else {
-            parse(file, imported, modules, texts);
+            parse(file, modules, texts);
             if (modules.find(file) != modules.end()) {
                 vector<string> & mods = modules[file];
                 imports.insert(imports.begin(), mods.begin(), mods.end());
