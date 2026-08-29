@@ -23,14 +23,14 @@ void serve (string folder, int port) {
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, & i, sizeof(i));
     sockaddr_in sock{};
     sock.sin_port = htons(port);
-    bind(server, (struct sockaddr *) & sock, sizeof(sock));
+    socklen_t len = sizeof(sock);
+    bind(server, (struct sockaddr *) & sock, len);
     listen(server, 5);
     printf("localhost:%d\n", port);
     while (true) {
-        socklen_t length = sizeof(sock);
-        int client = accept(server, (struct sockaddr *) & sock, & length);
-        char buffer[1024] = {0};
-        read(client, buffer, 1024);
+        int client = accept(server, (struct sockaddr *) & sock, & len);
+        char buffer[4096];
+        read(client, buffer, 4096);
         stringstream t(buffer);
         string file;
         t >> buffer >> file;
@@ -41,16 +41,16 @@ void serve (string folder, int port) {
         ifstream f(folder + file);
         if (file.front() != '/' || f.peek() == -1) {
             f.close();
-            f.open(folder + "/x.html");
             type = "text/html";
+            f.open(folder + "/x.html");
         } else {
             type = types[file.substr(file.find_last_of('.') + 1)];
         }
         if (f.is_open()) {
             stringstream t;
             t << f.rdbuf();
-            string content = t.str();
             f.close();
+            string content = t.str();
             string response = "HTTP/1.\ncontent-type:" + type + "\n\n" + content;
             send(client, response.c_str(), response.size(), 0);
         }
