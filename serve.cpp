@@ -1,4 +1,4 @@
-// clang++ serve.cpp -o serve.out && ./serve.out a 1234
+// c++ serve.cpp -o serve.out && ./serve.out a 1234
 
 #include <cstdio>
 #include <fstream>
@@ -38,14 +38,13 @@ void serve (string folder, int port) {
             file.replace(i, 3, " ");
         }
         string type;
-        ifstream f(folder + file);
-        if (file.front() != '/' || f.peek() == -1) {
-            f.close();
+        if (file.front() != '/' || file == "/") {
+            file = "/x.html";
             type = "text/html";
-            f.open(folder + "/x.html");
         } else {
             type = types[file.substr(file.find_last_of('.') + 1)];
         }
+        ifstream f(folder + file);
         if (f.is_open()) {
             stringstream t;
             t << f.rdbuf();

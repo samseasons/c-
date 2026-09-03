@@ -1,4 +1,4 @@
-// clang++ bundle.cpp -o bundle.out && ./bundle.out a/a.js a/y.js
+// c++ bundle.cpp -o bundle.out && ./bundle.out a/a.js a/y.js
 
 #include <algorithm>
 #include <fstream>
@@ -31,7 +31,7 @@ string resolve (string f, string file) {
     return f;
 }
 
-string replace (string & text, string & past, string next) {
+string substitute (string & text, string & past, string next) {
     int a = 0;
     int i = past.length();
     int j = next.length();
@@ -39,7 +39,7 @@ string replace (string & text, string & past, string next) {
         if (text.length() < a + i + 1) {
             return text;
         }
-        if (base64.find(text[a + i]) != -1 || (base64 + "\"'.").find(text[a - 1]) != -1) {
+        if (base64.find(text[a + i]) != -1 || (a > 0 && (base64 + "\"'.").find(text[a - 1]) != -1)) {
             a += i;
             continue;
         }
@@ -105,11 +105,13 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
     files[file] = vector<string>();
     vector<string> order;
     while ((i = text.find("import ")) != -1) {
-        char t = text[i - 1];
-        if (i != 0 && t != '\t' && t != '\n' && t != ' ') {
-            text = text.substr(i + 6);
-            i = text.find("import ");
-            continue;
+        if (i != 0) {
+            char j = text[i - 1];
+            if (j != '\t' && j != '\n' && j != ' ') {
+                text = text.substr(i + 6);
+                i = text.find("import ");
+                continue;
+            }
         }
         i += 6;
         while (text[i] == ' ') {
@@ -204,7 +206,7 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
             if (j == -1 || (i < j && i != -1)) {
                 split.push_back(names);
             } else {
-                while (j != -1) {
+                while (j != -1 && j + 1 != names.find('>')) {
                     split.push_back(names.substr(0, j));
                     names = names.substr(j);
                     if ((j = names.find(',')) == -1) {
@@ -238,7 +240,7 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
             }
         }
         for (string & name : pair->second) {
-            text = replace(text, name, name + '_' + path);
+            text = substitute(text, name, name + '_' + path);
         }
     }
     lines = {};
