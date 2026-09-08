@@ -39,7 +39,7 @@ string substitute (string & text, string & past, string next) {
         if (text.length() < a + i + 1) {
             return text;
         }
-        if (base64.find(text[a + i]) != -1 || (a > 0 && (base64 + "\"'.").find(text[a - 1]) != -1)) {
+        if (base64.find(text[a + i]) != -1 || (a != 0 && (base64 + "\"'.").find(text[a - 1]) != -1)) {
             a += i;
             continue;
         }
@@ -68,7 +68,7 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
     while ((i = text.find("\n\n")) != -1) {
         text.replace(i, 2, "\n");
     }
-    vector<string> lines;
+    vector<string> lines = {};
     stringstream s(text);
     for (string line; getline(s, line, '\n');) {
         lines.push_back(line);
@@ -100,16 +100,14 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
             text += line + "\n";
         }
     }
+    map<string, vector<string>> files = {{file, {}}};
+    vector<string> order = {};
     string texta = text;
-    map<string, vector<string>> files;
-    files[file] = vector<string>();
-    vector<string> order;
     while ((i = text.find("import ")) != -1) {
         if (i != 0) {
             char j = text[i - 1];
             if (j != '\t' && j != '\n' && j != ' ') {
                 text = text.substr(i + 6);
-                i = text.find("import ");
                 continue;
             }
         }
@@ -121,7 +119,7 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
         i = text.find("from");
         j = text.find('"');
         int k = text.find("'");
-        vector<string> names;
+        vector<string> names = {};
         if (i != -1 && (i < j || j == -1) && (i < k || k == -1)) {
             while (i < text.length()) {
                 char j = text[i - 1];
@@ -156,27 +154,26 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
             i = text.find(f);
             f = resolve(text.substr(0, i), file);
             if (files.find(f) == files.end()) {
-                files[f] = vector<string>();
+                files[f] = {};
                 order.push_back(f);
             }
             files[f].insert(files[f].end(), names.begin(), names.end());
         }
     }
-    modules[file] = order;
-    for (string & i : order) {
-        if (texts.find(i) == texts.end()) {
-            if (modules.find(i) == modules.end()) {
+    vector<string> mods = {};
+    modules[file] = {};
+    for (string & f : order) {
+        if (texts.find(f) == texts.end()) {
+            mods.push_back(f);
+            if (modules.find(f) == modules.end()) {
+                modules[file] = mods;
                 return;
-            } else {
-                vector<string> & mods = modules[i];
-                if (find(mods.begin(), mods.end(), file) == mods.end()) {
-                    return;
-                }
             }
         }
     }
     vector<string> declares = {"async", "class", "const", "default", "function", "let", "var"};
     vector<char> defines = {'\n', ' ', '(', ',', '.', '['};
+    text = texta;
     while ((i = text.find("export ")) != -1) {
         text = text.substr(i + 7);
         for (string & name : declares) {
@@ -193,7 +190,7 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
         while (i < names.length() && names[i] == ' ') {
             i++;
         }
-        vector<string> split;
+        vector<string> split = {};
         if (i < names.length() && names[i] == '{') {
             names = names.substr(i + 1);
             stringstream t(names.substr(0, names.find('}')));
@@ -206,7 +203,7 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
             if (j == -1 || (i < j && i != -1)) {
                 split.push_back(names);
             } else {
-                while (j != -1 && j + 1 != names.find('>')) {
+                while (j != -1 && names[j + 1] != '>') {
                     split.push_back(names.substr(0, j));
                     names = names.substr(j);
                     if ((j = names.find(',')) == -1) {
@@ -218,7 +215,7 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
             }
         }
         for (string & name : split) {
-            while (!name.empty() && find(defines.begin(), defines.end(), name.front()) != defines.end()) {
+            while (find(defines.begin(), defines.end(), name.front()) != defines.end()) {
                 name = name.substr(1);
             }
             for (char & i : defines) {
@@ -268,14 +265,14 @@ void parse (string & file, map<string, vector<string>> & modules, map<string, st
 }
 
 void build (string file, string output) {
-    vector<string> imported;
+    vector<string> imported = {};
     vector<string> imports = {file};
-    map<string, vector<string>> modules;
-    map<string, string> texts;
+    map<string, vector<string>> modules = {};
+    map<string, string> texts = {};
     while (!imports.empty()) {
         file = imports[0];
         if (find(imported.begin(), imported.end(), file) != imported.end()) {
-            imports.erase(remove(imports.begin(), imports.end(), file), imports.end());
+            imports.erase(imports.begin());
         } else {
             parse(file, modules, texts);
             if (modules.find(file) != modules.end()) {
