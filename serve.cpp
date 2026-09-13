@@ -38,7 +38,7 @@ void serve (string folder, int port) {
             file.replace(i, 3, " ");
         }
         string type;
-        if (file.front() != '/' || file == "/") {
+        if (file[0] != '/' || file == "/") {
             file = "/x.html";
             type = "text/html";
         } else {
@@ -48,8 +48,8 @@ void serve (string folder, int port) {
         if (f.is_open()) {
             stringstream t;
             t << f.rdbuf();
-            f.close();
             string content = t.str();
+            f.close();
             string response = "HTTP/1.\ncontent-type:" + type + "\n\n" + content;
             send(client, response.c_str(), response.size(), 0);
         }
@@ -58,6 +58,6 @@ void serve (string folder, int port) {
 }
 
 int main (int argc, char * argv[]) {
-    serve(argc > 1 ? argv[1] : "a", argc > 2 ? stoi(argv[2]) : 1234);
+    serve(argc > 1 ? argv[1] : "a", argc > 2 ? atoi(argv[2]) : 1234);
     return 0;
 }
