@@ -1,6 +1,7 @@
 // c++ serve.cpp -o serve.out && ./serve.out a 1234
 
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <netinet/in.h>
@@ -10,18 +11,22 @@
 
 using namespace std;
 
-map<string, string> types = {
-    {"css", "text/css"},
-    {"html", "text/html"},
-    {"ico", "image/x-icon"},
-    {"js", "application/javascript"}
-};
+map<string, string> create_types () {
+  map<string, string> types;
+  types["css"] = "text/css";
+  types["html"] = "text/html";
+  types["ico"] = "image/x-icon";
+  types["js"] = "application/javascript";
+  return types;
+}
+
+map<string, string> types = create_types();
 
 void serve (string folder, int port) {
     int server = socket(AF_INET, SOCK_STREAM, 0);
     int i = 1;
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, & i, sizeof(i));
-    sockaddr_in sock{};
+    sockaddr_in sock = {};
     sock.sin_port = htons(port);
     socklen_t len = sizeof(sock);
     bind(server, (struct sockaddr *) & sock, len);
@@ -44,7 +49,8 @@ void serve (string folder, int port) {
         } else {
             type = types[file.substr(file.find_last_of('.') + 1)];
         }
-        ifstream f(folder + file);
+        file = folder + file;
+        ifstream f(file.c_str());
         if (f.is_open()) {
             stringstream t;
             t << f.rdbuf();
