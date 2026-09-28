@@ -31,14 +31,12 @@ string resolve (string f, string file) {
     return f;
 }
 
-string substitute (string & text, string & past, string next) {
+string substitute (string next, string & past, string & text) {
     int a = 0;
     int i = past.length();
     int j = next.length();
     while ((a = text.find(past, a)) != -1) {
-        if (text.length() < a + i + 1) {
-            break;
-        } else if (base64.find(text[a + i]) != -1 || (a != 0 && (base64 + "\"'.").find(text[a - 1]) != -1)) {
+        if (base64.find(text[a + i]) != -1 || (a != 0 && (base64 + "\"'.").find(text[a - 1]) != -1)) {
             a += i;
             continue;
         }
@@ -151,7 +149,6 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
         }
     }
     vector<string> mods;
-    modules[file].clear();
     for (int i = 0, length = order.size(); i < length; i++) {
         string f = order[i];
         if (texts.find(f) == texts.end()) {
@@ -232,7 +229,7 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
         vector<string> value = pair->second;
         for (int j = 0, length = value.size(); j < length; j++) {
             string name = value[j];
-            text = substitute(text, name, name + '_' + path);
+            text = substitute(name + '_' + path, name, text);
         }
     }
     stringstream t(text);
