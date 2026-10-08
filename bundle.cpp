@@ -31,17 +31,17 @@ string resolve (string f, string file) {
     return f;
 }
 
-string substitute (string next, string & past, string & text) {
-    int a = 0;
-    int i = past.length();
+string substitute (string & match, string next, string & text) {
+    int a = text.find(match);
+    int i = match.length();
     int j = next.length();
-    while ((a = text.find(past, a)) != -1) {
+    while (a != -1) {
         if (base64.find(text[a + i]) != -1 || (a != 0 && (base64 + "\"'.").find(text[a - 1]) != -1)) {
-            a += i;
-            continue;
+            a = text.find(match, a + i);
+        } else {
+            text = text.substr(0, a) + next + text.substr(a + i);
+            a = text.find(match, a + j);
         }
-        text = text.substr(0, a) + next + text.substr(a + i);
-        a += j;
     }
     return text;
 }
@@ -87,8 +87,9 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
             text += line + "\n";
         }
     }
-    map<string, vector<string> > files;
-    files[file];
+    map<string, string> defaults;
+    map<string, map<string, string> > exports;
+    exports[file];
     vector<string> order;
     string texta = text;
     while ((i = text.find("import ")) != -1) {
@@ -103,13 +104,15 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
         while (text[i] == ' ') {
             i++;
         }
+        string defaulted = "";
+        map<string, string> names;
         text = text.substr(i);
         i = text.find("from");
         j = text.find('"');
         k = text.find("'");
-        vector<string> names;
         if (i != -1 && (i < j || j == -1) && (i < k || k == -1)) {
-            while (i < text.length()) {
+            int length = text.length();
+            while (i < length) {
                 char j = text[i - 1];
                 char k = text[i + 4];
                 if ((j == ' ' || j == '}') && (k == ' ' || k == '"' || k == '\'')) {
@@ -118,16 +121,32 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
                 i += 4;
                 i += text.substr(i).find("from");
             }
-            j = 0;
-            string t = text.substr(0, i);
-            while ((k = t.find_first_of(" ,{}", j)) != -1) {
-                if (j < k) {
-                    names.push_back(t.substr(j, k - j));
+            string variables = text.substr(0, i);
+            if ((j = variables.find('{')) != -1) {
+                k = variables.find('}');
+                istringstream stream(variables.substr(j + 1, k - j - 1));
+                variables = variables.substr(0, j);
+                string name;
+                while (getline(stream, name, ',')) {
+                    if ((j = name.find_first_not_of("\t ")) != -1) {
+                        name = name.substr(j);
+                    }
+                    name = name.substr(0, name.find_last_not_of("\t ") + 1);
+                    if ((j = name.find(" as ")) != -1) {
+                        names[name.substr(0, j)] = name.substr(j + 4);
+                    } else if (!name.empty()) {
+                        names[name] = name;
+                    }
                 }
-                j = k + 1;
             }
-            if (j < t.length()) {
-                names.push_back(t.substr(j));
+            string name = variables.substr(0, variables.find(','));
+            if ((j = name.find_first_not_of("\t ")) != -1) {
+                name = name.substr(j);
+            }
+            name = name.substr(0, name.find_last_not_of("\t ") + 1);
+            if (!name.empty()) {
+                defaulted = name;
+                names[name] = name;
             }
             i += 5;
             while (text[i] == ' ') {
@@ -141,29 +160,41 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
             text = text.substr(i + 1);
             i = text.find(f);
             f = resolve(text.substr(0, i), file);
-            if (files.find(f) == files.end()) {
-                files[f];
+            if (exports.find(f) == exports.end()) {
+                exports[f];
                 order.push_back(f);
             }
-            files[f].insert(files[f].end(), names.begin(), names.end());
+            if (!defaulted.empty()) {
+                defaults[f] = defaulted;
+            }
+            for (map<string, string>::iterator pair = names.begin(); pair != names.end(); pair++) {
+                exports[f][pair->first] = pair->second;
+            }
         }
     }
+    bool dependencies = false;
     vector<string> mods;
     for (int i = 0, length = order.size(); i < length; i++) {
         string f = order[i];
         if (texts.find(f) == texts.end()) {
             mods.push_back(f);
             if (modules.find(f) == modules.end()) {
-                modules[file] = mods;
-                return;
+                dependencies = true;
             }
         }
+    }
+    if (dependencies) {
+        modules[file] = mods;
+        return;
     }
     string declares[] = {"async", "class", "const", "default", "function", "let", "var"};
     string defines = "\n (,.[";
     text = texta;
     while ((i = text.find("export ")) != -1) {
         text = text.substr(i + 7);
+        if (text.find("default ") == 0) {
+            continue;
+        }
         for (int i = 0, length = sizeof(declares) / sizeof(declares[0]); i < length; i++) {
             string name = declares[i];
             j = text.find(name);
@@ -171,54 +202,55 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
                 text = text.substr(j + name.length());
             }
         }
-        string names = "";
         if ((i = text.find('\n')) != -1) {
-            names = text.substr(0, i);
-        }
-        i = 0;
-        while (i < names.length() && names[i] == ' ') {
-            i++;
-        }
-        vector<string> split;
-        if (i < names.length() && names[i] == '{') {
-            names = names.substr(i + 1);
-            stringstream t(names.substr(0, names.find('}')));
-            for (string name; getline(t, name, ',');) {
-                split.push_back(name);
+            string variables = text.substr(0, i);
+            i = 0;
+            int length = variables.length();
+            while (i < length && variables[i] == ' ') {
+                i++;
             }
-        } else {
-            i = names.find('(');
-            j = names.find('=');
-            if (j == -1 || (i < j && i != -1)) {
-                split.push_back(names);
+            vector<string> split;
+            if (i < length && variables[i] == '{') {
+                variables = variables.substr(i + 1);
+                stringstream t(variables.substr(0, variables.find('}')));
+                for (string name; getline(t, name, ',');) {
+                    split.push_back(name);
+                }
             } else {
-                while (j != -1 && names[j + 1] != '>') {
-                    split.push_back(names.substr(0, j));
-                    names = names.substr(j);
-                    if ((j = names.find(',')) == -1) {
-                        break;
+                i = variables.find('(');
+                j = variables.find('=');
+                if (j == -1 || (i < j && i != -1)) {
+                    split.push_back(variables);
+                } else {
+                    while (j != -1 && variables[j + 1] != '>') {
+                        split.push_back(variables.substr(0, j));
+                        variables = variables.substr(j);
+                        if ((j = variables.find(',')) == -1) {
+                            break;
+                        }
+                        variables = variables.substr(j);
+                        j = variables.find('=');
                     }
-                    names = names.substr(j);
-                    j = names.find('=');
                 }
             }
-        }
-        for (int i = 0, len = split.size(); i < len; i++) {
-            string name = split[i];
-            while (defines.find(name[0]) != -1) {
-                name = name.substr(1);
-            }
-            for (int j = 0, length = defines.length(); j < length; j++) {
-                if ((k = name.find(defines[j])) != -1) {
-                    name = name.substr(0, k);
+            for (int i = 0, len = split.size(); i < len; i++) {
+                string name = split[i];
+                while (defines.find(name[0]) != -1) {
+                    name = name.substr(1);
                 }
+                for (int j = 0, length = defines.length(); j < length; j++) {
+                    if ((k = name.find(defines[j])) != -1) {
+                        name = name.substr(0, k);
+                    }
+                }
+                exports[file][name] = name;
             }
-            files[file].push_back(name);
         }
         i = text.find("export ");
     }
+    string defaulted = "";
     text = texta;
-    for (map<string, vector<string> >::iterator pair = files.begin(); pair != files.end(); pair++) {
+    for (map<string, map<string, string> >::iterator pair = exports.begin(); pair != exports.end(); pair++) {
         string f = pair->first;
         string path = f.substr(0, f.length() - 3);
         for (int j = 0, length = path.length(); j < length; j++) {
@@ -226,10 +258,18 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
                 path[j] = '_';
             }
         }
-        vector<string> value = pair->second;
-        for (int j = 0, length = value.size(); j < length; j++) {
-            string name = value[j];
-            text = substitute(name + '_' + path, name, text);
+        if (f == file) {
+            defaulted = path;
+        }
+        map<string, string> exported = pair->second;
+        for (map<string, string>::iterator value = exported.begin(); value != exported.end(); value++) {
+            string named = value->first;
+            string name = value->second;
+            if (defaults.find(f) != defaults.end() && defaults[f] == name) {
+                text = substitute(name, '_' + path, text);
+            } else {
+                text = substitute(name, named + '_' + path, text);
+            }
         }
     }
     stringstream t(text);
@@ -237,7 +277,7 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
     for (string line; getline(t, line, '\n');) {
         string a = line.substr(line.find_first_not_of("\t "));
         if (a.rfind("export default ", 0) == 0) {
-            line = a.substr(15);
+            line = '_' + defaulted + " = " + a.substr(15);
         } else if (a.rfind("export ", 0) == 0) {
             line = a.substr(7);
             a = line.substr(line.find_first_not_of("\t "));
@@ -270,6 +310,7 @@ void build (string file, string output) {
             }
             if (texts.find(file) != texts.end()) {
                 imported.push_back(file);
+                imports.erase(imports.begin());
             }
         }
     }
