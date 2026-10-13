@@ -12,20 +12,26 @@ using namespace std;
 string base64 = "$0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
 
 string resolve (string f, string file) {
-    if (f.rfind("./", 0) == 0) {
-        f = f.substr(2);
+    while (f.rfind("../") == 0) {
+        f = f.substr(3);
+        file = file.substr(0, file.find_last_of('/'));
     }
-    char i = f[0];
-    if (i != '.' && i != '/') {
-        f = file.substr(0, file.find_last_of('/')) + '/' + f;
-    } else if (f.rfind("../", 0) == 0) {
-        while (f.rfind("../", 0) == 0) {
-            f = f.substr(3);
-            file = file.substr(0, file.find_last_of('/'));
+    f = file.substr(0, file.find_last_of('/')) + '/' + f;
+    string treats[] = {"", "/", "", "", "/", "\\", ""};
+    string tricks[] = {"~", ":", "./", ".\\", "//", "\\\\", "../"};
+    for (int i = 0, length = sizeof(treats) / sizeof(treats[0]); i < length; i++) {
+        string treat = treats[i];
+        string trick = tricks[i];
+        int j = 0;
+        while ((j = f.find(trick, j)) != -1) {
+            f = f.replace(j, trick.length(), treat);
+            j += treat.length();
         }
-        f = file.substr(0, file.find_last_of('/')) + '/' + f;
     }
-    if (f.substr(f.length() - 3) != ".js") {
+    while (f[0] == '/') {
+        f = f.substr(1);
+    }
+    if (f.length() > 2 && f.substr(f.length() - 3) != ".js") {
         f += ".js";
     }
     return f;
@@ -276,16 +282,16 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
     text = "";
     for (string line; getline(t, line, '\n');) {
         string a = line.substr(line.find_first_not_of("\t "));
-        if (a.rfind("export default ", 0) == 0) {
+        if (a.rfind("export default ") == 0) {
             line = '_' + defaulted + " = " + a.substr(15);
-        } else if (a.rfind("export ", 0) == 0) {
+        } else if (a.rfind("export ") == 0) {
             line = a.substr(7);
             a = line.substr(line.find_first_not_of("\t "));
             if (a[0] == '{') {
                 continue;
             }
         }
-        if (!line.empty() && a.rfind("import ", 0) != 0) {
+        if (!line.empty() && a.rfind("import ") != 0) {
             text += line + "\n";
         }
     }

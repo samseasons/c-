@@ -23,6 +23,14 @@ map<string, string> create_types () {
 map<string, string> types = create_types();
 
 void serve (string folder, int port) {
+    string index = "/x.html";
+    if (folder.length() > 4 && folder.substr(folder.length() - 5) == ".html") {
+        int i = folder.rfind("/");
+        if (i != -1) {
+            index = folder.substr(i);
+            folder = folder.substr(0, i);
+        }
+    }
     int server = socket(AF_INET, SOCK_STREAM, 0);
     int i = 1;
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, & i, sizeof(i));
@@ -39,15 +47,18 @@ void serve (string folder, int port) {
         stringstream t(buffer);
         string file;
         t >> buffer >> file;
+        if (file[0] != '/' || file.find("..") != -1) {
+            continue;
+        }
         while ((i = file.find("%20")) != -1) {
             file.replace(i, 3, " ");
         }
-        string type;
-        if (file[0] != '/' || file == "/") {
-            file = "/x.html";
-            type = "text/html";
+        string type = file.substr(file.find_last_of('.') + 1);
+        if (types.find(type) != types.end()) {
+            type = types[type];
         } else {
-            type = types[file.substr(file.find_last_of('.') + 1)];
+            file = index;
+            type = "text/html";
         }
         file = folder + file;
         ifstream f(file.c_str());
