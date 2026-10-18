@@ -28,8 +28,10 @@ string resolve (string f, string file) {
             j += treat.length();
         }
     }
-    while (f[0] == '/') {
+    char i = f[0];
+    while (i == '/' || i == '\\') {
         f = f.substr(1);
+        i = f[0];
     }
     if (f.length() > 2 && f.substr(f.length() - 3) != ".js") {
         f += ".js";
@@ -37,28 +39,13 @@ string resolve (string f, string file) {
     return f;
 }
 
-string substitute (string & match, string next, string & text) {
-    int a = text.find(match);
-    int i = match.length();
-    int j = next.length();
-    while (a != -1) {
-        if (base64.find(text[a + i]) != -1 || (a != 0 && (base64 + "\"'.").find(text[a - 1]) != -1)) {
-            a = text.find(match, a + i);
-        } else {
-            text = text.substr(0, a) + next + text.substr(a + i);
-            a = text.find(match, a + j);
-        }
-    }
-    return text;
-}
-
 void parse (string & file, map<string, vector<string> > & modules, map<string, string> & texts) {
     string text;
     ifstream f(file.c_str());
     if (f.is_open()) {
-        stringstream t;
-        t << f.rdbuf();
-        text = t.str();
+        stringstream s;
+        s << f.rdbuf();
+        text = s.str();
         f.close();
     } else {
         texts[file] = "";
@@ -271,10 +258,20 @@ void parse (string & file, map<string, vector<string> > & modules, map<string, s
         for (map<string, string>::iterator value = exported.begin(); value != exported.end(); value++) {
             string named = value->first;
             string name = value->second;
-            if (defaults.find(f) != defaults.end() && defaults[f] == name) {
-                text = substitute(name, '_' + path, text);
-            } else {
-                text = substitute(name, named + '_' + path, text);
+            string next = '_' + path;
+            if (defaults.find(f) == defaults.end() || defaults[f] != name) {
+                next = named + next;
+            }
+            i = text.find(name);
+            j = name.length();
+            k = next.length();
+            while (i != -1) {
+                if (base64.find(text[i + j]) != -1 || (i != 0 && (base64 + "\"'.").find(text[i - 1]) != -1)) {
+                    i = text.find(name, i + j);
+                } else {
+                    text = text.substr(0, i) + next + text.substr(i + j);
+                    i = text.find(name, i + k);
+                }
             }
         }
     }
@@ -323,6 +320,27 @@ void build (string file, string output) {
     string text = "";
     for (int i = 0, length = imported.size(); i < length; i++) {
         text += texts[imported[i]];
+    }
+    text = text.substr(0, text.length() - 1);
+    if (output.length() > 4 && output.substr(output.length() - 5) == ".html") {
+        text = "<!doctype html><html><body><script>" + text + "</script></body></html>";
+        ifstream f(output.c_str());
+        if (f.is_open()) {
+            stringstream s;
+            s << f.rdbuf();
+            string t = s.str();
+            f.close();
+            int i = t.find("<script");
+            int j = t.find("</script");
+            if (i == -1 || j == -1) {
+                i = t.find("</body");
+                if (i != -1) {
+                    text = t.substr(0, i) + text.substr(27, text.length() - 41) + t.substr(i);
+                }
+            } else {
+                text = t.substr(0, i) + text.substr(27, text.length() - 41) + t.substr(j + 9);
+            }
+        }
     }
     ofstream f(output.c_str());
     if (f.is_open()) {

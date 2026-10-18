@@ -47,28 +47,28 @@ void serve (string folder, int port) {
         stringstream t(buffer);
         string file;
         t >> buffer >> file;
-        if (file[0] != '/' || file.find("..") != -1) {
-            continue;
-        }
-        while ((i = file.find("%20")) != -1) {
-            file.replace(i, 3, " ");
-        }
-        string type = file.substr(file.find_last_of('.') + 1);
-        if (types.find(type) != types.end()) {
-            type = types[type];
-        } else {
-            file = index;
-            type = "text/html";
-        }
-        file = folder + file;
-        ifstream f(file.c_str());
-        if (f.is_open()) {
-            stringstream t;
-            t << f.rdbuf();
-            string content = t.str();
-            f.close();
-            string response = "HTTP/1.\ncontent-type:" + type + "\n\n" + content;
-            send(client, response.c_str(), response.size(), 0);
+        if (file[0] == '/' && file.find("..") == -1) {
+            printf("%s\n", file.c_str());
+            while ((i = file.find("%20")) != -1) {
+                file.replace(i, 3, " ");
+            }
+            string type = file.substr(file.find_last_of('.') + 1);
+            if (types.find(type) != types.end()) {
+                type = types[type];
+            } else {
+                file = index;
+                type = "text/html";
+            }
+            file = folder + file;
+            ifstream f(file.c_str());
+            if (f.is_open()) {
+                stringstream t;
+                t << f.rdbuf();
+                string content = t.str();
+                f.close();
+                string response = "HTTP/1.\ncontent-type:" + type + "\n\n" + content;
+                send(client, response.c_str(), response.size(), 0);
+            }
         }
         close(client);
     }
